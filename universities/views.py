@@ -2,6 +2,9 @@ from django.shortcuts import render
 
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import generics
+from django.contrib.auth.models import User
+from rest_framework.permissions import IsAuthenticated, AllowAny
+
 
 # Create your views here.
 
@@ -9,7 +12,12 @@ from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
 from .models import University
-from .serializers import UniversitySerializer
+from .serializers import UniversitySerializer, UserSerializer
+
+class CreateUserView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    permission_classes = [AllowAny]
 
 @api_view(['GET'])
 def get_universities(request):

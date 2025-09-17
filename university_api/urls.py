@@ -31,3 +31,4 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view()),
     path('api/', include('universities.urls')),
 ]
+   

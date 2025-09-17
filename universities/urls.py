@@ -1,14 +1,25 @@
+from universities.views import InitializeChapaPaymentView, PaymentWebhookView
+
 from django.urls import path, include
 from . import views
+from rest_framework.routers import DefaultRouter
+
+router = DefaultRouter()
+router.register(r'users', views.UserViewSet, basename='user')
 
 urlpatterns = [
-    path('universities/', views.get_universities, name='get_universities'),
+    path('', include(router.urls)),
+    path('dashboard/', views.DashboardView.as_view(), name='dashboard'),
+    path('groups/', views.GroupList.as_view(), name='group-list'),
+    
+    path('chapa/initialize/', InitializeChapaPaymentView.as_view(), name='initialize_chapa_payment'),
+    path('chapa-webhook/', PaymentWebhookView.as_view(), name='chapa_webhook'),
+
+    path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
+    path('universities/', views.UniversityList.as_view(), name='university-list'),
     path('universities/create/', views.create_university, name='create_university'),
-    path('universities/', views.UniversityList.as_view()),
+    path('universities/bulk_create/', views.UniversityBulkCreate.as_view(), name='university-bulk-create'),
     path('universities/<int:pk>/', views.get_university_detail, name='university_detail'),
-
-    path('auth/', include('djoser.urls')),
-    path('auth/', include('djoser.urls.jwt')),  # Enables JWT login/logout
-
     path('universities/<int:pk>/update/', views.update_university, name='update_university'),
+    path('universities/<int:pk>/delete/', views.delete_university, name='delete_university'),
 ]

@@ -17,7 +17,7 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework_simplejwt.views import TokenRefreshView
-from universities.views import CreateUserView
+from universities.views import CreateUserView, PaymentWebhookView
 from universities.serializers import MyTokenObtainPairSerializer
 from rest_framework_simplejwt.views import TokenObtainPairView
 
@@ -26,6 +26,8 @@ class MyTokenObtainPairView(TokenObtainPairView):
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    # Explicitly define the webhook URL at the root to ensure it's always found.
+    path('api/chapa-webhook/', PaymentWebhookView.as_view(), name='chapa_webhook'),
     path('api/user/register/', CreateUserView.as_view()),
     path('api/token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view()),

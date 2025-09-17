@@ -1,5 +1,4 @@
-from universities.views import InitializeChapaPaymentView, PaymentWebhookView
-
+from universities.views import InitializeChapaPaymentView
 from django.urls import path, include
 from . import views
 from rest_framework.routers import DefaultRouter
@@ -13,9 +12,7 @@ urlpatterns = [
     path('groups/', views.GroupList.as_view(), name='group-list'),
     
     path('chapa/initialize/', InitializeChapaPaymentView.as_view(), name='initialize_chapa_payment'),
-    path('chapa-webhook/', PaymentWebhookView.as_view(), name='chapa_webhook'),
-
-    path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
+pas.Adm,
     path('universities/', views.UniversityList.as_view(), name='university-list'),
     path('universities/create/', views.create_university, name='create_university'),
     path('universities/bulk_create/', views.UniversityBulkCreate.as_view(), name='university-bulk-create'),

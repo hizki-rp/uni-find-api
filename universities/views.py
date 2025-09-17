@@ -6,6 +6,8 @@ from rest_framework import generics, viewsets, status
 from django.contrib.auth.models import User, Group
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from django.urls import reverse
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.views import APIView
 from django.utils import timezone
 from datetime import timedelta

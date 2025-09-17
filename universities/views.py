@@ -154,10 +154,14 @@ class InitializeChapaPaymentView(APIView):
 
         # The backend URL is the webhook Chapa will call.
         # The frontend URL is where the user is redirected after payment.
-        callback_url = request.build_absolute_uri(reverse('chapa_webhook'))
-        # Use an environment variable for the frontend URL for better portability
-        return_url = os.environ.get("FRONTEND_URL", "http://localhost:5173") + "/dashboard"
+        # In production, request.build_absolute_uri can be unreliable behind proxies.
+        # It's more robust to use an environment variable for the base URL.
+        backend_base_url = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip('/')
+        callback_url = backend_base_url + reverse('chapa_webhook')
 
+        # Ensure no double slashes in the return URL and use an environment variable.
+        frontend_base_url = os.environ.get("FRONTEND_URL", "http://localhost:5173").rstrip('/')
+        return_url = frontend_base_url + "/dashboard"
         payload = {
             "amount": amount,
             "currency": "ETB",

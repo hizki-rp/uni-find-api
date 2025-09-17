@@ -13,6 +13,8 @@ import os
 import uuid
 import requests
 import json
+import hmac
+import hashlib
 
 # Create your views here.
 
@@ -214,12 +216,48 @@ class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request, *args, **kwargs):
+        # 1. Webhook Signature Verification
+        chapa_webhook_secret = os.environ.get("CHAPA_WEBHOOK_SECRET")
+        if not chapa_webhook_secret:
+            print("Chapa webhook secret is not configured.")
+            return Response({'status': 'error', 'message': 'Internal server error: Webhook secret not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        # Chapa may send the signature in either of these headers. DRF headers are case-insensitive.
+        signature = request.headers.get('Chapa-Signature') or request.headers.get('X-Chapa-Signature')
+        if not signature:
+            return Response({'status': 'error', 'message': 'Webhook signature not found.'}, status=status.HTTP_401_UNAUTHORIZED)
+
+        try:
+            # The payload needs to be stringified in a compact, consistent way.
+            # The Node.js example stringifies the parsed JSON, so we do the same with request.data.
+            # Using separators=(',', ':') creates a compact JSON string without whitespace.
+            payload_string = json.dumps(request.data, separators=(',', ':')).encode('utf-8')
+            
+            # Calculate the expected hash
+            expected_hash = hmac.new(
+                chapa_webhook_secret.encode('utf-8'),
+                msg=payload_string,
+                digestmod=hashlib.sha256
+            ).hexdigest()
+
+            # Compare signatures securely to prevent timing attacks
+            if not hmac.compare_digest(signature, expected_hash):
+                print(f"Signature mismatch. Expected: {expected_hash}, Received: {signature}")
+                return Response({'status': 'error', 'message': 'Invalid webhook signature.'}, status=status.HTTP_401_UNAUTHORIZED)
+        
+        except Exception as e:
+            print(f"Error during signature verification: {e}")
+            return Response({'status': 'error', 'message': 'Internal server error during signature verification.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        print("✅ Webhook signature verified")
+
+        # Signature is valid, now we can proceed with the existing logic.
         # Chapa sends the full transaction detail in the POST body.
         tx_ref = request.data.get('tx_ref')
         if not tx_ref:
             return Response({'status': 'error', 'message': 'Transaction reference not found in webhook payload.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 1. Verify the transaction with Chapa to ensure authenticity
+        # 2. Verify the transaction with Chapa to ensure authenticity (this is a secondary check)
         chapa_secret_key = os.environ.get("CHAPA_SECRET_KEY")
         if not chapa_secret_key:
             print("Chapa secret key is not configured for webhook verification.")
@@ -237,7 +275,7 @@ class PaymentWebhookView(APIView):
 
             # Check if the transaction was successful
             if verification_data.get("data", {}).get("status") == "success":
-                # 2. Process the payment
+                # 3. Process the payment
                 try:
                     # tx_ref format: "unifinder-{user.id}-{uuid}"
                     user_id = int(tx_ref.split('-')[1])
@@ -246,7 +284,7 @@ class PaymentWebhookView(APIView):
                     print(f"Could not find user from tx_ref: {tx_ref}")
                     return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-                # 3. Update user's dashboard
+                # 4. Update user's dashboard
                 dashboard = user.dashboard
                 
                 # Extend subscription by 30 days
@@ -262,7 +300,7 @@ class PaymentWebhookView(APIView):
 
                 print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
                 
-                # 4. Acknowledge receipt to Chapa
+                # 5. Acknowledge receipt to Chapa
                 return Response({'status': 'success'}, status=status.HTTP_200_OK)
             else:
                 print(f"Chapa verification shows transaction not successful for tx_ref {tx_ref}: {verification_data.get('message')}")

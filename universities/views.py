@@ -155,7 +155,7 @@ class InitializeChapaPaymentView(APIView):
         # The backend URL is the webhook Chapa will call.
         # The frontend URL is where the user is redirected after payment.
         callback_url = request.build_absolute_uri(reverse('chapa_webhook'))
-        return_url = "http://localhost:5173/dashboard"  # Adjust for production
+        return_url = "https://uni-frontend-lac.vercel.app/dashboard"
 
         payload = {
             "amount": amount,
@@ -285,7 +285,7 @@ class PaymentWebhookView(APIView):
                     return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
 
                 # 4. Update user's dashboard
-                dashboard = user.dashboard
+                dashboard, _ = UserDashboard.objects.get_or_create(user=user)
                 
                 # Extend subscription by 30 days
                 if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():

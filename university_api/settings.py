@@ -35,9 +35,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = 'django-insecure-yt)2uovn6ck=nwxdrvh#^jr7@o1wrsg%&&!cmp(gxn%f==hl+y'
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
-ALLOWED_HOSTS = ["*"]
+# Use environment variables for allowed hosts in production
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+
+# Trust the 'X-Forwarded-Proto' header from the reverse proxy (like Render)
+# This ensures request.build_absolute_uri() generates https:// URLs correctly.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
 # allow frontend to access backend
 CORS_ALLOWED_ORIGINS = [
@@ -45,6 +50,8 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "https://uni-frontend-lac.vercel.app",
 ]
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_CREDENTIALS = True
 
 # Application definition
 

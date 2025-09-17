@@ -155,7 +155,8 @@ class InitializeChapaPaymentView(APIView):
         # The backend URL is the webhook Chapa will call.
         # The frontend URL is where the user is redirected after payment.
         callback_url = request.build_absolute_uri(reverse('chapa_webhook'))
-        return_url = "https://uni-frontend-lac.vercel.app/dashboard"
+        # Use an environment variable for the frontend URL for better portability
+        return_url = os.environ.get("FRONTEND_URL", "http://localhost:5173") + "/dashboard"
 
         payload = {
             "amount": amount,

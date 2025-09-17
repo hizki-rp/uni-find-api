@@ -246,8 +246,10 @@ class PaymentWebhookView(APIView):
             return Response({'status': 'error', 'message': 'Internal server error: Webhook secret not configured.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         # Chapa may send the signature in either of these headers. DRF headers are case-insensitive.
-        signature = request.headers.get('Chapa-Signature') or request.headers.get('X-Chapa-Signature')
-        if not signature:
+        chapa_signature = request.headers.get('Chapa-Signature')
+        x_chapa_signature = request.headers.get('X-Chapa-Signature')
+
+        if not chapa_signature and not x_chapa_signature:
             return Response({'status': 'error', 'message': 'Webhook signature not found.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
@@ -263,10 +265,15 @@ class PaymentWebhookView(APIView):
                 digestmod=hashlib.sha256
             ).hexdigest()
 
-            # Compare signatures securely to prevent timing attacks
-            if not hmac.compare_digest(signature, expected_hash):
-                print(f"Signature mismatch. Expected: {expected_hash}, Received: {signature}")
-                print(f"Canonical JSON for signing: {payload_string.decode('utf-8', errors='ignore')}")
+            # Check if either signature is valid
+            chapa_sig_valid = chapa_signature and hmac.compare_digest(chapa_signature, expected_hash)
+            x_chapa_sig_valid = x_chapa_signature and hmac.compare_digest(x_chapa_signature, expected_hash)
+
+            if not (chapa_sig_valid or x_chapa_sig_valid):
+                print(f"Signature mismatch. Expected: {expected_hash}")
+                print(f"  Received Chapa-Signature: {chapa_signature}")
+                print(f"  Received X-Chapa-Signature: {x_chapa_signature}")
+                print(f"  Canonical JSON for signing: {payload_string.decode('utf-8', errors='ignore')}")
                 return Response({'status': 'error', 'message': 'Invalid webhook signature.'}, status=status.HTTP_401_UNAUTHORIZED)
         
         except Exception as e:

@@ -220,6 +220,15 @@ def update_university(request, pk):
 class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
+    def get(self, request, *args, **kwargs):
+        # This GET handler is for debugging purposes.
+        # You can visit this URL in your browser to check if it's reachable.
+        # e.g., https://your-backend-domain.onrender.com/api/chapa-webhook/
+        return Response({
+            'status': 'ok',
+            'message': 'Webhook URL is reachable. Ready to receive POST requests from Chapa.'
+        }, status=status.HTTP_200_OK)
+
     def post(self, request, *args, **kwargs):
         # 1. Webhook Signature Verification
         chapa_webhook_secret = os.environ.get("CHAPA_WEBHOOK_SECRET")

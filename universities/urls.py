@@ -12,7 +12,7 @@ urlpatterns = [
     path('groups/', views.GroupList.as_view(), name='group-list'),
     
     path('chapa/initialize/', InitializeChapaPaymentView.as_view(), name='initialize_chapa_payment'),
-pas.Adm,
+    path('admin/stats/', views.AdminStatsView.as_view(), name='admin-stats'),
     path('universities/', views.UniversityList.as_view(), name='university-list'),
     path('universities/create/', views.create_university, name='create_university'),
     path('universities/bulk_create/', views.UniversityBulkCreate.as_view(), name='university-bulk-create'),

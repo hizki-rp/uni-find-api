@@ -219,6 +219,7 @@ def update_university(request, pk):
         return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+@method_decorator(csrf_exempt, name='dispatch')
 class PaymentWebhookView(APIView):
     permission_classes = [AllowAny]
 
@@ -232,6 +233,12 @@ class PaymentWebhookView(APIView):
         }, status=status.HTTP_200_OK)
 
     def post(self, request, *args, **kwargs):
+        # --- Enhanced Logging for Debugging ---
+        print("--- Chapa Webhook Received ---")
+        print(f"Headers: {request.headers}")
+        print(f"Raw Body: {request.body.decode('utf-8', errors='ignore')}")
+        # --- End Enhanced Logging ---
+
         # 1. Webhook Signature Verification
         chapa_webhook_secret = os.environ.get("CHAPA_WEBHOOK_SECRET")
         if not chapa_webhook_secret:
@@ -244,19 +251,22 @@ class PaymentWebhookView(APIView):
             return Response({'status': 'error', 'message': 'Webhook signature not found.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            # The payload to sign is the raw request body as a bytestring.
-            # This is more reliable than re-serializing the parsed JSON.
+            # Chapa's webhook signature seems to be based on a canonicalized JSON string,
+            # not the raw request body. We will re-serialize the parsed data to match this.
+            # Using separators=(',', ':') creates a compact JSON string without whitespace.
+            payload_string = json.dumps(request.data, separators=(',', ':')).encode('utf-8')
+
             # Calculate the expected hash
             expected_hash = hmac.new(
                 chapa_webhook_secret.encode('utf-8'),
-                msg=request.body,
+                msg=payload_string,
                 digestmod=hashlib.sha256
             ).hexdigest()
 
             # Compare signatures securely to prevent timing attacks
             if not hmac.compare_digest(signature, expected_hash):
                 print(f"Signature mismatch. Expected: {expected_hash}, Received: {signature}")
-                print(f"Raw body for signing: {request.body.decode('utf-8', errors='ignore')}")
+                print(f"Canonical JSON for signing: {payload_string.decode('utf-8', errors='ignore')}")
                 return Response({'status': 'error', 'message': 'Invalid webhook signature.'}, status=status.HTTP_401_UNAUTHORIZED)
         
         except Exception as e:

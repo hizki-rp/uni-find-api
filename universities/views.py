@@ -242,91 +242,69 @@ class PaymentWebhookView(APIView):
             return Response({'status': 'error', 'message': 'Webhook signature not found.'}, status=status.HTTP_401_UNAUTHORIZED)
 
         try:
-            # The payload needs to be stringified in a compact, consistent way.
-            # The Node.js example stringifies the parsed JSON, so we do the same with request.data.
-            # Using separators=(',', ':') creates a compact JSON string without whitespace.
-            payload_string = json.dumps(request.data, separators=(',', ':')).encode('utf-8')
-            
+            # The payload to sign is the raw request body as a bytestring.
+            # This is more reliable than re-serializing the parsed JSON.
             # Calculate the expected hash
             expected_hash = hmac.new(
                 chapa_webhook_secret.encode('utf-8'),
-                msg=payload_string,
+                msg=request.body,
                 digestmod=hashlib.sha256
             ).hexdigest()
 
             # Compare signatures securely to prevent timing attacks
             if not hmac.compare_digest(signature, expected_hash):
                 print(f"Signature mismatch. Expected: {expected_hash}, Received: {signature}")
+                print(f"Raw body for signing: {request.body.decode('utf-8', errors='ignore')}")
                 return Response({'status': 'error', 'message': 'Invalid webhook signature.'}, status=status.HTTP_401_UNAUTHORIZED)
         
         except Exception as e:
             print(f"Error during signature verification: {e}")
             return Response({'status': 'error', 'message': 'Internal server error during signature verification.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-        print("✅ Webhook signature verified")
+        print("✅ Webhook signature verified.")
 
         # Signature is valid, now we can proceed with the existing logic.
         # Chapa sends the full transaction detail in the POST body.
-        tx_ref = request.data.get('tx_ref')
+        webhook_data = request.data
+        tx_ref = webhook_data.get('tx_ref')
+        
         if not tx_ref:
             return Response({'status': 'error', 'message': 'Transaction reference not found in webhook payload.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 2. Verify the transaction with Chapa to ensure authenticity (this is a secondary check)
-        chapa_secret_key = os.environ.get("CHAPA_SECRET_KEY")
-        if not chapa_secret_key:
-            print("Chapa secret key is not configured for webhook verification.")
-            return Response({'status': 'error', 'message': 'Internal server error.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        # 2. Check if the transaction was successful from the webhook payload.
+        # This is safe because we have already verified the signature.
+        if webhook_data.get("status") == "success":
+            # 3. Process the payment
+            try:
+                # tx_ref format: "unifinder-{user.id}-{uuid}"
+                user_id = int(tx_ref.split('-')[1])
+                user = User.objects.get(id=user_id)
+            except (IndexError, ValueError, User.DoesNotExist):
+                print(f"Could not find user from tx_ref: {tx_ref}")
+                return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        headers = {
-            "Authorization": f"Bearer {chapa_secret_key}",
-        }
-        verify_url = f"https://api.chapa.co/v1/transaction/verify/{tx_ref}"
-
-        try:
-            response = requests.get(verify_url, headers=headers)
-            response.raise_for_status()
-            verification_data = response.json()
-
-            # Check if the transaction was successful
-            if verification_data.get("data", {}).get("status") == "success":
-                # 3. Process the payment
-                try:
-                    # tx_ref format: "unifinder-{user.id}-{uuid}"
-                    user_id = int(tx_ref.split('-')[1])
-                    user = User.objects.get(id=user_id)
-                except (IndexError, ValueError, User.DoesNotExist):
-                    print(f"Could not find user from tx_ref: {tx_ref}")
-                    return Response({'status': 'error', 'message': 'Invalid transaction reference format.'}, status=status.HTTP_400_BAD_REQUEST)
-
-                # 4. Update user's dashboard
-                dashboard, _ = UserDashboard.objects.get_or_create(user=user)
-                
-                # Extend subscription by 30 days
-                if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():
-                    # If subscription is already active, extend from the end date
-                    dashboard.subscription_end_date += timedelta(days=30)
-                else:
-                    # If expired or not set, extend from today
-                    dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
-                
-                dashboard.subscription_status = 'active'
-                dashboard.save()
-
-                print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
-                
-                # 5. Acknowledge receipt to Chapa
-                return Response({'status': 'success'}, status=status.HTTP_200_OK)
+            # 4. Update user's dashboard
+            dashboard, _ = UserDashboard.objects.get_or_create(user=user)
+            
+            # Extend subscription by 30 days
+            if dashboard.subscription_end_date and dashboard.subscription_end_date > timezone.now().date():
+                # If subscription is already active, extend from the end date
+                dashboard.subscription_end_date += timedelta(days=30)
             else:
-                print(f"Chapa verification shows transaction not successful for tx_ref {tx_ref}: {verification_data.get('message')}")
-                return Response({'status': 'error', 'message': 'Transaction not successful'}, status=status.HTTP_400_BAD_REQUEST)
+                # If expired or not set, extend from today
+                dashboard.subscription_end_date = timezone.now().date() + timedelta(days=30)
+            
+            dashboard.subscription_status = 'active'
+            dashboard.save()
 
-        except requests.exceptions.RequestException as e:
-            print(f"Network error during Chapa verification: {e}")
-            return Response({'status': 'error', 'message': 'Network error during verification.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except Exception as e:
-            print(f"An unexpected error occurred in Chapa webhook: {e}")
-            # In a production environment, you would want to log this with more detail.
-            return Response({'status': 'error', 'message': 'An internal server error occurred.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            print(f"Successfully processed payment for user {user.id}. New expiry: {dashboard.subscription_end_date}")
+            
+            # 5. Acknowledge receipt to Chapa
+            return Response({'status': 'success'}, status=status.HTTP_200_OK)
+        else:
+            print(f"Webhook for tx_ref {tx_ref} was not successful. Status: {webhook_data.get('status')}")
+            # Acknowledge receipt, but don't process.
+            return Response({'status': 'received, not successful'}, status=status.HTTP_200_OK)
 
 class AdminStatsView(APIView):
     permission_classes = [IsAdminUser]

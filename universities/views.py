@@ -137,8 +137,8 @@ class UniversityList(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination
     filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
     filterset_fields = {
-        'country': ['exact'],
-        'city': ['exact'],
+        'country': ['icontains'],
+        'city': ['icontains'],
         'course_offered': ['icontains'],
         'application_fee': ['lte'],
         'tuition_fee': ['lte'],

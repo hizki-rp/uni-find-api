@@ -25,6 +25,8 @@ from rest_framework.response import Response
 from .models import University, UserDashboard
 from .permissions import HasActiveSubscription
 from .serializers import UniversitySerializer, UserSerializer, UserDetailSerializer, UserDashboardSerializer, GroupSerializer, UserProfileUpdateSerializer
+from rest_framework.pagination import PageNumberPagination
+from rest_framework import filters as drf_filters
 
 class CreateUserView(generics.CreateAPIView):
     queryset = User.objects.all()
@@ -123,12 +125,25 @@ class DashboardView(APIView):
         final_serializer = UserDashboardSerializer(dashboard)
         return Response(final_serializer.data, status=status.HTTP_200_OK)
 
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 100
+
 class UniversityList(generics.ListAPIView):
     queryset = University.objects.all()
     serializer_class = UniversitySerializer
     permission_classes = [IsAuthenticated, HasActiveSubscription]
-    filter_backends = [DjangoFilterBackend]
-    filterset_fields = ['country', 'course_offered', 'tuition_fee', 'application_fee']
+    pagination_class = StandardResultsSetPagination
+    filter_backends = [DjangoFilterBackend, drf_filters.SearchFilter]
+    filterset_fields = {
+        'country': ['exact'],
+        'city': ['exact'],
+        'course_offered': ['icontains'],
+        'application_fee': ['lte'],
+        'tuition_fee': ['lte'],
+    }
+    search_fields = ['name', 'country', 'course_offered']
 
 class InitializeChapaPaymentView(APIView):
     permission_classes = [IsAuthenticated]
